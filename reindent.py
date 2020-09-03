@@ -10,12 +10,14 @@
 -v (--verbose)  Verbose.   Print informative msgs; else no output.
    (--newline)  Newline.   Specify the newline character to use (CRLF, LF).
                            Default is the same as the original file.
+-i (--indent)   Indent.    Indentation level. Default is 4.
 -s (--strings)  Strings.   Disallow changes to string contents.
 -h (--help)     Help.      Print this usage information and exit.
 
-Change Python (.py) files to use 4-space indents and no hard tab characters.
-Also trim excess spaces and tabs from ends of lines, and remove empty lines
-at the end of files.  Also ensure the last line ends with a newline.
+Change Python (.py) files to use n-space indents, where n is specified by
+-i, as well as no hard tab characters. Also trim excess spaces and tabs
+from ends of lines, and remove empty lines at the end of files.  Also
+ensure the last line ends with a newline.
 
 If no paths are given on the command line, reindent operates as a filter,
 reading a single source file from standard input and writing the transformed
@@ -56,6 +58,7 @@ makebackup = True
 change_strings = True
 spec_newline = None
 """A specified newline to be used in the output (set by --newline option)"""
+indent_level = 4
 
 
 def usage(msg=None):
@@ -70,14 +73,20 @@ def errprint(*args):
 
 def main():
     import getopt
-    global verbose, recurse, dryrun, makebackup, spec_newline, change_strings
+    global verbose, recurse, dryrun, makebackup, spec_newline, change_strings, indent_level
     try:
         opts, args = getopt.getopt(sys.argv[1:], "drnvhs",
-            ["dryrun", "recurse", "nobackup", "verbose", "newline=", "help", "strings"])
+            ["dryrun", "recurse", "nobackup", "verbose", "newline=", "help", "strings", "indent="])
     except getopt.error as msg:
         usage(msg)
         return
     for o, a in opts:
+        if o in ('-i', '--indent'):
+          try:
+            indent_level = int(a)
+          except:
+            usage()
+            return
         if o in ('-d', '--dryrun'):
             dryrun = True
         elif o in ('-r', '--recurse'):
@@ -294,7 +303,7 @@ class Reindenter:
             thisstmt, thislevel = stats[i]
             nextstmt = stats[i + 1][0]
             have = getlspace(lines[thisstmt])
-            want = thislevel * 4
+            want = thislevel * indent_level
             if want < 0:
                 # A comment line.
                 if have:
@@ -308,7 +317,7 @@ class Reindenter:
                             jline, jlevel = stats[j]
                             if jlevel >= 0:
                                 if have == getlspace(lines[jline]):
-                                    want = jlevel * 4
+                                    want = jlevel * indent_level
                                 break
                     if want < 0:           # Maybe it's a hanging
                                            # comment like this one,
