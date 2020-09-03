@@ -1,0 +1,123 @@
+diff -r fe11f5f3f996 Tools/scripts/reindent.py
+--- a/Tools/scripts/reindent.py Sat Sep 29 10:53:55 2012 -0400
++++ b/Tools/scripts/reindent.py Sun Sep 30 17:12:41 2012 -0500
+@@ -10,6 +10,7 @@
+ -v (--verbose)  Verbose.   Print informative msgs; else no output.
+    (--newline)  Newline.   Specify the newline character to use (CRLF, LF).
+                            Default is the same as the original file.
++-s (--strings)  Strings.   Disallow changes to string contents.
+ -h (--help)     Help.      Print this usage information and exit.
+ 
+ Change Python (.py) files to use 4-space indents and no hard tab characters.
+@@ -52,6 +53,7 @@
+ recurse = False
+ dryrun = False
+ makebackup = True
++change_strings = True
+ spec_newline = None
+ """A specified newline to be used in the output (set by --newline option)"""
+ 
+@@ -68,10 +70,10 @@
+ 
+ def main():
+     import getopt
+-    global verbose, recurse, dryrun, makebackup, spec_newline
++    global verbose, recurse, dryrun, makebackup, spec_newline, change_strings
+     try:
+-        opts, args = getopt.getopt(sys.argv[1:], "drnvh",
+-            ["dryrun", "recurse", "nobackup", "verbose", "newline=", "help"])
++        opts, args = getopt.getopt(sys.argv[1:], "drnvhs",
++            ["dryrun", "recurse", "nobackup", "verbose", "newline=", "help", "strings"])
+     except getopt.error as msg:
+         usage(msg)
+         return
+@@ -92,6 +94,8 @@
+         elif o in ('-h', '--help'):
+             usage()
+             return
++        elif o in ('-s', '--strings'):
++            change_strings = False
+     if not args:
+         r = Reindenter(sys.stdin)
+         r.run()
+@@ -194,7 +198,80 @@
+         #  create output without mutating the newlines.
+         self.newlines = f.newlines
+ 
++    def rstrip_and_expand_tabs(self):
++        self.lines = [line for line in self.raw]
++        self.lines.insert(0, None)
++        # Only apply rstrip if the line is not part of a multiline string
++        # and expand tabs only if not within in a string.
++        tokens = tokenize.generate_tokens(self.getline)
++
++        strmask = {}
++        def addmask(line, scol, ecol):
++            # Keep track of start/end columns for a string on a particular
++            # line. Each element is used to toggle the string state on a line.
++            if line in strmask:
++                strmask[line].extend([scol, ecol])
++            else:
++                strmask[line] = [scol, ecol]
++
++        lines = self.lines
++        for _token in tokens:
++            _type, string, slinecol, elinecol, line = _token
++            if _type == tokenize.STRING:
++                sl, sc = slinecol
++                el, ec = elinecol
++                if sl == el:
++                    # Single line string
++                    addmask(sl, sc, ec)
++                else:
++                    # Multi-line string
++                    addmask(sl, sc, len(lines[sl]))
++                    strmask[sl].append(-1) # Start multi-line
++                    strmask[el] = [-1]  # Stop multi-line
++                    addmask(el, 0, ec)
++
++        self.index = 1  # reset index for self.getline
++
++        n = 1
++        multi = False
++        while n < len(lines):
++            line = lines[n]
++            strtoggle = strmask.get(n, None)
++            if strtoggle is None:
++                if not multi:
++                    lines[n] = _rstrip(line).expandtabs() + '\n'
++            else:
++                # Process strings on a single line
++                isstr = False
++                scol = 0
++                processed = []
++                while strtoggle:
++                    ecol = strtoggle.pop(0)
++                    if ecol == -1:      # toggle multiline mode
++                        if not multi:
++                            ecol = len(line)
++                        multi = not multi
++                        isstr = multi
++                        continue
++                    if isstr:
++                        processed.append(line[scol:ecol])
++                    else:
++                        processed.append(line[scol:ecol].expandtabs())
++
++                    scol = ecol
++                    isstr = not isstr
++
++                if not multi:
++                    processed.append(_rstrip(line[ecol:]).expandtabs() + '\n')
++                else:
++                    processed.append(line[ecol:-1])
++
++                lines[n] = ''.join(processed)
++            n += 1
++
+     def run(self):
++        if not change_strings:
++            self.rstrip_and_expand_tabs()
+         tokens = tokenize.generate_tokens(self.getline)
+         for _token in tokens:
+             self.tokeneater(*_token)

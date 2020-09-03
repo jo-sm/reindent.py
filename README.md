@@ -2,7 +2,7 @@
 
 `reindent.py` with option to change the number of spaces.
 
-This implementation adds the [patch for multiline string literals](http://bugs.python.org/issue12930) and adds an `--indent` option that allows for non-4 space width indentations.
+This implementation adds the [patch for multiline string literals by Roger Serwy](https://bugs.python.org/issue12930#msg171678) and adds an `--indent` option that allows for non-4 space width indentations.
 
 ## Note
 
